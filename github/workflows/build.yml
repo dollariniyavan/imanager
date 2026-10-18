@@ -1,0 +1,37 @@
+name: Build LoanManager iOS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install xcodegen
+      run: |
+        brew update
+        brew install xcodegen || true
+
+    - name: Generate Xcode project
+      working-directory: LoanManager-iOS
+      run: |
+        xcodegen
+
+    - name: Build for iOS Simulator
+      run: |
+        xcodebuild -project LoanManager-iOS/LoanManager.xcodeproj \
+          -scheme LoanManager \
+          -sdk iphonesimulator \
+          -destination 'platform=iOS Simulator,name=iPhone 14' \
+          -configuration Release \
+          -derivedDataPath build clean build
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: loanmanager-simulator-build
+        path: build
