@@ -1,0 +1,29 @@
+name: LoanManager
+options:
+  bundleIdPrefix: com.idollar          # <- change to your own reverse-domain
+  deploymentTarget:
+    iOS: "15.0"
+targets:
+  LoanManager:
+    type: application
+    platform: iOS
+    sources:
+      - path: LoanManager              # Swift files
+      - path: www                      # the web app, copied into the bundle as a folder reference
+        type: folder
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.idollar.loanmanager   # <- change to your own
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        CODE_SIGN_STYLE: Automatic
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: "Loan Manager"
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_NSFaceIDUsageDescription: "Loan Manager uses Face ID to keep your loan records private."
+        INFOPLIST_KEY_NSContactsUsageDescription: "Pick a customer from your contacts."
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: "Used for Tamil voice search."
+        INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: "Used to turn your Tamil speech into a search."

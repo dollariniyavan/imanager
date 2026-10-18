@@ -1,0 +1,49 @@
+name: Build iPhone app (.ipa)
+
+on:
+  workflow_dispatch:      # lets you press "Run workflow" in the Actions tab
+  push:
+    branches: [main, master]
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build (unsigned; Sideloadly signs it on your PC)
+        shell: bash
+        run: |
+          xcodebuild \
+            -project LoanManager.xcodeproj \
+            -scheme LoanManager \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee build.log
+
+      - name: Package .ipa
+        run: |
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/LoanManager.app Payload/
+          zip -qr LoanManager.ipa Payload
+
+      - name: Upload .ipa
+        uses: actions/upload-artifact@v4
+        with:
+          name: LoanManager-ipa
+          path: LoanManager.ipa
+
+      - name: Upload build log (useful if the build fails)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log

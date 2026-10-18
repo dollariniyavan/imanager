@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+<meta charset="UTF-8">
+<title>Management System</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<link rel="stylesheet" href="assets/style.css">
+<style>
+.page { display: none; }
+.page.active { display: block; }
+</style>
+</head>
+<body class="locked">
+
+<!-- ===================== LOCK SCREEN (fingerprint / phone screen lock) ===================== -->
+<div id="lockScreen">
+    <div class="login-card lock-card">
+        <div class="login-logo">💰</div>
+        <h1>Loan Manager</h1>
+        <p class="login-sub">Unlock with Face ID, Touch ID or your passcode</p>
+        <p class="lock-msg" id="lockMsg" hidden></p>
+        <button type="button" class="btn btn-save login-btn" id="lockBtn">🔓 Unlock</button>
+    </div>
+</div>
+<div id="appRoot">
+
+<nav class="global-nav">
+    <button class="nav-item" data-page="borrower" onclick="showPage('borrower')"><span class="nav-icon">🤝</span> Installment</button>
+    <button class="nav-item" data-page="interest" onclick="showPage('interest')"><span class="nav-icon">💰</span> Interest</button>
+    <button class="nav-item" data-page="rent" onclick="showPage('rent')"><span class="nav-icon">🏠</span> House Rent</button>
+    <button class="nav-item" data-page="moi" onclick="showPage('moi')"><span class="nav-icon">📇</span> MOI</button>
+    <button class="nav-item" id="menuNavBtn" onclick="toggleNavigationDrawer()"><span class="nav-icon">☰</span> Menu</button>
+</nav>
+
+<!-- ===================== NAVIGATION DRAWER ===================== -->
+<div class="drawer-overlay" id="drawerOverlay" onclick="closeNavigationDrawer()"></div>
+<div class="nav-drawer" id="navDrawer">
+    <div class="drawer-header">
+        <h2>📂 Menu</h2>
+        <button class="drawer-close" onclick="closeNavigationDrawer()">&times;</button>
+    </div>
+    <div class="drawer-items">
+        <button class="drawer-item" data-page="reports" onclick="showPage('reports'); closeNavigationDrawer();"><span class="nav-icon">📊</span> Reports</button>
+        <button class="drawer-item" data-page="summary" onclick="showPage('summary'); closeNavigationDrawer();"><span class="nav-icon">📈</span> Summary</button>
+        <button class="drawer-item" onclick="openBackupModal(); closeNavigationDrawer();"><span class="nav-icon">🗄</span> Backup</button>
+        <button class="drawer-item" onclick="NativeBridge.lock(); closeNavigationDrawer();"><span class="nav-icon">🔒</span> Lock App</button>
+    </div>
+</div>
+
+
+<!-- ===================== BORROWER (first page) ===================== -->
+<section id="page-borrower" class="page">
+<div class="topbar"><h1>🤝 Installment</h1></div>
+<div class="container">
+
+    <div class="toolbar">
+        <input type="text" id="bor_searchBox" placeholder="Search name, mobile, principal, paid...">
+        <button class="mic-btn" id="bor_micBtn" title="Voice search (Tamil)">🎤</button>
+        <button class="btn btn-contact" onclick="contactFilter('bor')">📇 Contacts</button>
+        <button class="btn btn-add" onclick="bor_openAdd()">+ New Borrower Record</button>
+    </div>
+    <div class="seg-row">
+        <div class="seg" id="bor_seg">
+            <button data-s="active" class="on">Active <b id="bor_cnt_active">0</b></button>
+            <button data-s="inactive">Inactive <b id="bor_cnt_inactive">0</b></button>
+            <button data-s="all">All <b id="bor_cnt_all">0</b></button>
+        </div>
+        <span class="chip" id="bor_chip" hidden><span id="bor_chipText"></span><button onclick="clearContactFilter('bor')" title="Clear">✕</button></span>
+    </div>
+
+    <div style="overflow-x:auto;">
+    <table>
+        <thead>
+        <tr>
+            <th>Name</th><th>Mobile</th><th>Principal</th>
+            <th>Paid</th><th>Due Count</th><th>Day Count</th><th>Status</th><th>Actions</th>
+        </tr>
+        </thead>
+        <tbody id="bor_tableBody"><tr><td colspan="8">Loading...</td></tr></tbody>
+    </table>
+    </div>
+</div>
+
+<!-- ADD MODAL -->
+<div class="modal-overlay" id="bor_addModal">
+    <div class="modal-box">
+        <button class="modal-close" onclick="closeModal('bor_addModal')">&times;</button>
+        <h2>New Borrower Record</h2>
+        <form id="bor_addForm">
+            <div class="contact-row">
+                <button type="button" class="btn btn-contact" onclick="contactToForm('bor_addForm')">📇 Pick from Contacts</button>
+                <span class="hint">Name and mobile come from your phone contacts.</span>
+            </div>
+            <div class="form-grid">
+                <div><label>Name</label><input type="text" name="name" required></div>
+                <div><label>Mobile (+91)</label><input type="tel" inputmode="numeric" name="mobile" required></div>
+                <div><label>Principal</label><input type="number" step="0.01" name="principal" required></div>
+                <div><label>Date</label><input type="date" name="transaction_date" required></div>
+                <div>
+                    <label>Payment Schedule</label>
+                    <select name="payment_type">
+                        <option value="100days">100 Days</option>
+                        <option value="10weeks">10 Weeks</option>
+                        <option value="20weeks">20 Weeks</option>
+                        <option value="monthly">Monthly (up to 5 months)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-btn-row">
+                <button type="button" class="btn btn-save" onclick="bor_submitAdd(false)">Add</button>
+                <button type="button" class="btn btn-send" onclick="bor_submitAdd(true)">Submit &amp; Send</button>
+                <button type="button" class="btn btn-cancel" onclick="closeModal('bor_addModal')">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- VIEW MODAL (2 parts) -->
+<div class="modal-overlay" id="bor_viewModal">
+    <div class="modal-box" style="max-width:700px;">
+        <button class="modal-close" onclick="closeModal('bor_viewModal')">&times;</button>
+        <h2>Borrower Details</h2>
+        <div class="tab-buttons">
+            <button class="active" onclick="bor_showTab('bor_tabDetails', this)">Customer Details</button>
+            <button onclick="bor_showTab('bor_tabHistory', this)">Transaction History</button>
+        </div>
+        <div class="tab-content active" id="bor_tabDetails">
+            <div class="readonly-box" id="bor_viewCustomerBox"></div>
+            <div class="modal-btn-row">
+                <button class="btn btn-send" onclick="bor_sendCustomer()">📤 Send Customer Details</button>
+            </div>
+        </div>
+        <div class="tab-content" id="bor_tabHistory">
+            <div id="bor_historyBox"></div>
+            <div class="modal-btn-row">
+                <button class="btn btn-send" onclick="bor_sendHistory()">📤 Send</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- PAY DUE MODAL -->
+<div class="modal-overlay" id="bor_payModal">
+    <div class="modal-box">
+        <button class="modal-close" onclick="closeModal('bor_payModal')">&times;</button>
+        <h2>Pay Due</h2>
+        <div class="readonly-box" id="bor_payCustomerBox"></div>
+        <form id="bor_payForm">
+            <input type="hidden" id="bor_payCustomerId">
+            <div class="form-grid">
+                <div><label>Due Amount</label><input type="number" step="0.01" id="bor_payAmount" required></div>
+                <div><label>Date</label><input type="date" id="bor_payDate" required></div>
+            </div>
+            <div class="modal-btn-row">
+                <button type="button" class="btn btn-save" onclick="bor_submitPay(false)">Save</button>
+                <button type="button" class="btn btn-send" onclick="bor_submitPay(true)">Submit &amp; Send</button>
+                <button type="button" class="btn btn-cancel" onclick="closeModal('bor_payModal')">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+</section>
+
+<!-- ===================== INTEREST (second page) ===================== -->
+<section id="page-interest" class="page">
+<div class="topbar"><h1>💰 Interest</h1></div>
+<div class="container">
+
+    <div class="toolbar">
+        <input type="text" id="int_searchBox" placeholder="Search name, mobile, principal, rate, date...">
+        <button class="mic-btn" id="int_micBtn" title="Voice search (Tamil)">🎤</button>
+        <button class="btn btn-contact" onclick="contactFilter('int')">📇 Contacts</button>
+        <button class="btn btn-add" onclick="int_openAdd()">+ New Interest Record</button>
+    </div>
+    <div class="seg-row">
+        <div class="seg" id="int_seg">
+            <button data-s="active" class="on">Active <b id="int_cnt_active">0</b></button>
+            <button data-s="inactive">Inactive <b id="int_cnt_inactive">0</b></button>
+            <button data-s="all">All <b id="int_cnt_all">0</b></button>
+        </div>
+        <span class="chip" id="int_chip" hidden><span id="int_chipText"></span><button onclick="clearContactFilter('int')" title="Clear">✕</button></span>
+    </div>
+
+    <div style="overflow-x:auto;">
+    <table>
+        <thead>
+        <tr>
+            <th>Name</th><th>Mobile</th><th>Principal</th>
+            <th>Principal Balance</th><th>Rate %</th><th>Date</th><th>No. of Payments</th>
+            <th>Total Interest Collected</th><th>Status</th><th>Actions</th>
+        </tr>
+        </thead>
+        <tbody id="int_tableBody"><tr><td colspan="10">Loading...</td></tr></tbody>
+    </table>
+    </div>
+</div>
+
+<!-- ADD NEW RECORD MODAL -->
+<div class="modal-overlay" id="int_addModal">
+    <div class="modal-box">
+        <button class="modal-close" onclick="closeModal('int_addModal')">&times;</button>
+        <h2>New Interest Record</h2>
+        <form id="int_addForm">
+            <div class="contact-row">
+                <button type="button" class="btn btn-contact" onclick="contactToForm('int_addForm')">📇 Pick from Contacts</button>
+                <span class="hint">Name and mobile come from your phone contacts.</span>
+            </div>
+            <div class="form-grid">
+                <div><label>Name</label><input type="text" name="name" required></div>
+                <div><label>Mobile (+91)</label><input type="tel" inputmode="numeric" name="mobile" required></div>
+                <div><label>Principal</label><input type="number" step="0.01" name="principal" required></div>
+                <div><label>Rate of Interest (%)</label><input type="number" step="0.01" name="rate_of_interest" required></div>
+                <div><label>Transaction Date</label><input type="date" name="transaction_date" required></div>
+            </div>
+            <div class="modal-btn-row">
+                <button type="button" class="btn btn-save" onclick="int_submitAdd(false)">Save</button>
+                <button type="button" class="btn btn-send" onclick="int_submitAdd(true)">Submit &amp; Send</button>
+                <button type="button" class="btn btn-cancel" onclick="closeModal('int_addModal')">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- VIEW MODAL (3 tabs) -->
+<div class="modal-overlay" id="int_viewModal">
+    <div class="modal-box" style="max-width:760px;">
+        <button class="modal-close" onclick="closeModal('int_viewModal')">&times;</button>
+        <h2>Customer Details</h2>
+        <div class="tab-buttons">
+            <button class="active" onclick="int_showTab('int_tabDetails', this)">Customer Details</button>
+            <button onclick="int_showTab('int_tabInterest', this)">Interest Collection</button>
+            <button onclick="int_showTab('int_tabPrincipal', this)">Principal Collection</button>
+        </div>
+
+        <div class="tab-content active" id="int_tabDetails">
+            <div class="readonly-box" id="int_viewCustomerBox"></div>
+            <div class="modal-btn-row">
+                <button class="btn btn-send" onclick="int_sendCustomer()">📤 Send Customer Details</button>
+                <button class="btn btn-pay pay-btn" onclick="int_openCollectModal('interest')">Interest Collection</button>
+                <button class="btn btn-pay pay-btn" onclick="int_openCollectModal('principal')">Principal Collection</button>
+            </div>
+        </div>
+
+        <div class="tab-content" id="int_tabInterest">
+            <div id="int_interestHistoryBox"></div>
+            <div class="modal-btn-row">
+                <button class="btn btn-send" onclick="int_sendHistory('interest')">📤 Send</button>
+            </div>
+        </div>
+
+        <div class="tab-content" id="int_tabPrincipal">
+            <div id="int_principalHistoryBox"></div>
+            <div class="modal-btn-row">
+                <button class="btn btn-send" onclick="int_sendHistory('principal')">📤 Send</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- COLLECT (Interest / Principal / Pay) MODAL -->
+<div class="modal-overlay" id="int_collectModal">
+    <div class="modal-box">
+        <button class="modal-close" onclick="closeModal('int_collectModal')">&times;</button>
+        <h2 id="int_collectTitle">Interest Collection</h2>
+        <div class="readonly-box" id="int_collectCustomerBox"></div>
+        <form id="int_collectForm">
+            <input type="hidden" id="int_collectMode" value="interest">
+            <input type="hidden" id="int_collectCustomerId">
+            <div class="form-grid">
+                <div><label>Amount</label><input type="number" step="0.01" id="int_collectAmount" required></div>
+                <div><label>Date</label><input type="date" id="int_collectDate" required></div>
+            </div>
+            <p class="hint">Payment status is set automatically: "Complete" once the remaining principal balance reaches 0, otherwise "Partial".</p>
+            <div class="modal-btn-row">
+                <button type="button" class="btn btn-save" onclick="int_submitCollect(false)">Save</button>
+                <button type="button" class="btn btn-send" onclick="int_submitCollect(true)">Submit &amp; Send</button>
+                <button type="button" class="btn btn-cancel" onclick="closeModal('int_collectModal')">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+</section>
+
+<!-- ===================== HOUSE RENT ===================== -->
+<section id="page-rent" class="page">
+<div class="topbar"><h1>🏠 House Rent</h1></div>
+<div class="container">
+
+    <div class="toolbar">
+        <input type="text" id="rnt_searchBox" placeholder="Search name, mobile, rent, date...">
+        <button class="mic-btn" id="rnt_micBtn" title="Voice search (Tamil)">🎤</button>
+        <button class="btn btn-contact" onclick="contactFilter('rnt')">📇 Contacts</button>
+        <button class="btn btn-add" onclick="rnt_openAdd()">+ New Rent Record</button>
+    </div>
+    <div class="seg-row">
+        <div class="seg" id="rnt_seg">
+            <button data-s="active" class="on">Active <b id="rnt_cnt_active">0</b></button>
+            <button data-s="inactive">Inactive <b id="rnt_cnt_inactive">0</b></button>
+            <button data-s="all">All <b id="rnt_cnt_all">0</b></button>
+        </div>
+        <span class="chip" id="rnt_chip" hidden><span id="rnt_chipText"></span><button onclick="clearContactFilter('rnt')" title="Clear">✕</button></span>
+    </div>
+
+    <div style="overflow-x:auto;">
+    <table>
+        <thead>
+        <tr>
+            <th>Name</th><th>Mobile</th><th>Rent Amount</th>
+            <th>Agreement Date</th><th>This Month</th><th>Status</th><th>Actions</th>
+        </tr>
+        </thead>
+        <tbody id="rnt_tableBody"><tr><td colspan="7">Loading...</td></tr></tbody>
+    </table>
+    </div>
+</div>
+
+<!-- ADD MODAL -->
+<div class="modal-overlay" id="rnt_addModal">
+    <div class="modal-box">
+        <button class="modal-close" onclick="closeModal('rnt_addModal')">&times;</button>
+        <h2>New Rent Record</h2>
+        <form id="rnt_addForm">
+            <div class="contact-row">
+                <button type="button" class="btn btn-contact" onclick="contactToForm('rnt_addForm')">📇 Pick from Contacts</button>
+                <span class="hint">Name and mobile come from your phone contacts.</span>
+            </div>
+            <div class="form-grid">
+                <div><label>Name</label><input type="text" name="name" required></div>
+                <div><label>Mobile (+91)</label><input type="tel" inputmode="numeric" name="mobile" required></div>
+                <div><label>Rent Amount</label><input type="number" step="0.01" name="rent_amount" required></div>
+                <div class="full"><label>Agreement Date</label><input type="date" name="agreement_date" required></div>
+            </div>
+            <div class="modal-btn-row">
+                <button type="button" class="btn btn-save" onclick="rnt_submitAdd(false)">Save</button>
+                <button type="button" class="btn btn-send" onclick="rnt_submitAdd(true)">Submit &amp; Send</button>
+                <button type="button" class="btn btn-cancel" onclick="closeModal('rnt_addModal')">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- VIEW MODAL -->
+<div class="modal-overlay" id="rnt_viewModal">
+    <div class="modal-box">
+        <button class="modal-close" onclick="closeModal('rnt_viewModal')">&times;</button>
+        <h2>Rent Details</h2>
+        <div class="readonly-box" id="rnt_viewCustomerBox"></div>
+        <h3>Payment History</h3>
+        <div id="rnt_historyBox"></div>
+        <div class="modal-btn-row">
+            <button class="btn btn-send" onclick="rnt_sendCustomer()">📤 Send</button>
+        </div>
+    </div>
+</div>
+
+<!-- PAY MODAL -->
+<div class="modal-overlay" id="rnt_payModal">
+    <div class="modal-box">
+        <button class="modal-close" onclick="closeModal('rnt_payModal')">&times;</button>
+        <h2>Rent Payment</h2>
+        <div class="readonly-box" id="rnt_payCustomerBox"></div>
+        <form id="rnt_payForm">
+            <input type="hidden" id="rnt_payCustomerId">
+            <div class="form-grid">
+                <div><label>Amount</label><input type="number" step="0.01" id="rnt_payAmount" required></div>
+                <div><label>Date</label><input type="date" id="rnt_payDate" required></div>
+            </div>
+            <div class="modal-btn-row">
+                <button type="button" class="btn btn-save" onclick="rnt_submitPay(false)">Save</button>
+                <button type="button" class="btn btn-send" onclick="rnt_submitPay(true)">Submit &amp; Send</button>
+                <button type="button" class="btn btn-cancel" onclick="closeModal('rnt_payModal')">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+</section>
+
+<!-- ===================== MOI (keeps its Print button; no active/inactive) ===================== -->
+<section id="page-moi" class="page">
+<div class="topbar"><h1>📇 MOI / Details</h1></div>
+<div class="container">
+
+    <div class="toolbar">
+        <input type="text" id="moi_searchBox" placeholder="Search Tamil name, English name, village, mobile...">
+        <button class="mic-btn" id="moi_micBtn" title="Voice search (Tamil)">🎤</button>
+        <select id="moi_villageSel" class="village-select" title="Filter by village" onchange="moi_loadTable()">
+            <option value="">🏘 Village (default order)</option>
+            <option value="__asc">🔼 All villages A → Z</option>
+        </select>
+        <button class="btn btn-add" onclick="moi_openAdd()">+ New Record</button>
+        <button class="btn btn-print" onclick="moi_printPDF()">🖨 Print PDF (Name/Village-Tamil, Income, Expenditure)</button>
+    </div>
+
+    <div style="overflow-x:auto;">
+    <table id="moi_moiTable">
+        <thead>
+        <tr>
+            <th class="sortable" data-col="0">Name (Tamil)</th>
+            <th class="sortable" data-col="1">Village (Tamil)</th>
+            <th class="sortable" data-col="2">Mobile</th>
+            <th class="sortable" data-col="3">Alternate Mobile</th>
+            <th class="sortable" data-col="4">Tran_date</th>
+            <th class="sortable" data-col="5">City</th>
+            <th class="sortable" data-col="6">Income</th>
+            <th class="sortable" data-col="7">Expenditure</th>
+            <th class="sortable" data-col="8">Information</th>
+            <th class="sortable" data-col="9">Updated</th>
+            <th>Actions</th>
+        </tr>
+        </thead>
+        <tbody id="moi_tableBody"><tr><td colspan="11">Loading...</td></tr></tbody>
+    </table>
+    </div>
+</div>
+
+<!-- ADD MODAL -->
+<div class="modal-overlay" id="moi_addModal">
+    <div class="modal-box">
+        <button class="modal-close" onclick="closeModal('moi_addModal')">&times;</button>
+        <h2>New MOI Record</h2>
+        <form id="moi_addForm">
+            <div class="contact-row">
+                <button type="button" class="btn btn-contact" onclick="moi_fillFromContact()">📇 Pick from Contacts</button>
+                <span class="hint">Name and mobile come from your phone contacts.</span>
+            </div>
+            <div class="form-grid">
+                <div><label>Name (Tamil)</label><input type="text" name="name_tamil"></div>
+                <div><label>Village (Tamil)</label><input type="text" name="village_tamil"></div>
+                <div><label>Mobile (+91)</label><input type="tel" inputmode="numeric" name="mobile"></div>
+                <div><label>Alternate Mobile</label><input type="tel" inputmode="numeric" name="alternate_mobile"></div>
+                <div><label>Tran_date</label><input type="date" name="tran_date"></div>
+                <div><label>City</label><input type="text" name="city"></div>
+                <div><label>Income</label><input type="number" step="0.01" name="income"></div>
+                <div><label>Expenditure</label><input type="number" step="0.01" name="expenditure"></div>
+                <div class="full"><label>Information</label><input type="text" name="information"></div>
+            </div>
+            <div class="modal-btn-row">
+                <button type="button" class="btn btn-save" onclick="moi_submitAdd()">Save</button>
+                <button type="button" class="btn btn-cancel" onclick="closeModal('moi_addModal')">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+</section>
+
+<!-- ===================== REPORTS (date-range transactions; keeps Print) ===================== -->
+<section id="page-reports" class="page">
+<div class="topbar"><h1>📊 Reports</h1></div>
+<div class="container">
+
+    <div class="toolbar">
+        <button class="btn btn-add" onclick="rpt_setRange('today')">📅 Today</button>
+        <button class="btn btn-add" onclick="rpt_setRange('month')">🗓 Last 30 Days</button>
+        <label style="font-size:13px;font-weight:600;">From
+            <input type="date" id="rpt_from" style="margin-left:4px;padding:6px;">
+        </label>
+        <label style="font-size:13px;font-weight:600;">To
+            <input type="date" id="rpt_to" style="margin-left:4px;padding:6px;">
+        </label>
+        <button class="btn btn-view" onclick="rpt_load()">Apply</button>
+        <button class="btn btn-print" onclick="rpt_printAll()">🖨 Print Report</button>
+    </div>
+
+    <p id="rpt_summary" style="font-weight:600;color:var(--heading);"></p>
+
+    <h2>🤝 Borrower Transactions</h2>
+    <h3>Due Collected</h3>
+    <div id="rpt_borrowerCollections"></div>
+    <h3>New Borrower Entries (Amount Given)</h3>
+    <div id="rpt_borrowerNew"></div>
+
+    <h2 style="margin-top:28px;">💰 Interest Transactions</h2>
+    <h3>Interest Collected</h3>
+    <div id="rpt_interestCollections"></div>
+    <h3>Principal Collected</h3>
+    <div id="rpt_principalCollections"></div>
+    <h3>New Interest Entries (Principal Given)</h3>
+    <div id="rpt_interestNew"></div>
+
+    <h2 style="margin-top:28px;">🏠 Rent Transactions</h2>
+    <h3>Rent Collected</h3>
+    <div id="rpt_rentCollections"></div>
+    <h3>New Rent Entries</h3>
+    <div id="rpt_rentNew"></div>
+</div>
+</section>
+
+<!-- ===================== SUMMARY (totals + graphs) ===================== -->
+<section id="page-summary" class="page">
+<div class="topbar"><h1>📈 Summary Report</h1></div>
+<div class="container">
+    <div class="toolbar">
+        <button class="btn btn-view" onclick="sum_load()">↻ Refresh</button>
+        <button class="btn btn-print" onclick="sum_print()">🖨 Print</button>
+        <span id="sum_asof" class="hint"></span>
+    </div>
+    <div id="sum_body"></div>
+</div>
+</section>
+
+<!-- ===================== BACKUP / RESTORE MODAL ===================== -->
+<div class="modal-overlay" id="dbModal">
+    <div class="modal-box">
+        <button class="modal-close" onclick="closeModal('dbModal')">&times;</button>
+        <h2>🗄 Backup / Restore</h2>
+        <p class="hint" style="margin-top:0">All data lives only on this phone. Take a backup regularly and keep a copy outside the phone (Google Drive, e-mail to yourself, another phone).</p>
+
+        <div style="margin-bottom:22px;">
+            <h3 style="margin-bottom:6px;">Create backup</h3>
+            <p class="hint" id="dbBackupInfo" style="font-size:13px;margin-top:0;">Checking...</p>
+            <button class="btn btn-save" id="dbBackupBtn" onclick="dbBackup()">⬆ Save / Share Backup</button>
+            <p id="dbBackupResult" style="font-size:13px;margin:8px 0 0;"></p>
+        </div>
+
+        <div>
+            <h3 style="margin-bottom:6px;">Restore</h3>
+            <p class="hint" style="font-size:13px;margin-top:0;">
+                Choose a backup file: <b>.json</b> made by this app, or a <b>.sql / .sql.gz</b> backup from the old web version.
+                <strong>This replaces the existing data in the tables found in the file</strong> — only restore a file you trust.
+            </p>
+            <input type="file" id="dbRestoreFile" accept=".json,.sql,.gz,application/json,application/gzip,application/octet-stream,text/plain">
+            <div class="modal-btn-row">
+                <button type="button" class="btn btn-pay" onclick="dbRestore()">⬇ Restore from File</button>
+            </div>
+            <p id="dbRestoreStatus" style="font-size:13px;margin-top:10px;"></p>
+        </div>
+    </div>
+</div>
+
+</div><!-- /appRoot -->
+
+<script src="assets/common.js"></script>
+<script src="assets/charts.js"></script>
+<script src="assets/app.js"></script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
